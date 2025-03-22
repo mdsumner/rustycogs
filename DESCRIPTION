@@ -1,10 +1,17 @@
 Package: rustycogs
-Title: What the Package Does (One Line, Title Case)
+Title: Wrapper Around 'async-tiff' Rust 
 Version: 0.0.0.9000
 Authors@R: c(
- person("Michael", "Sumner", email = "mdsumner@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-2471-7511"))
+ person("Michael", "Sumner", 
+            email = "mdsumner@gmail.com", 
+            role = c("aut", "cre"), 
+            comment = c(ORCID = "0000-0002-2471-7511")), 
+ person(given = "Josiah",
+             family = "Parry",
+             role = "ctb",
+             comment = c(ORCID = "0000-0001-9910-865X"))
    )
-Description: What the package does (one paragraph).
+Description: Reads tile data as raw bytes from a tiled TIFF on disk (scanline-oriented tiff not supported by the Rust lib afaik).
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: es
