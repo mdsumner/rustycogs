@@ -1175,6 +1175,7 @@ dependencies = [
  "async-tiff",
  "extendr-api",
  "object_store",
+ "tokio",
 ]
 
 [[package]]

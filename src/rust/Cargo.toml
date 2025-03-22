@@ -11,3 +11,4 @@ name = 'rustycogs'
 extendr-api = '*'
 async-tiff = '*'
 object_store = "0.12"
+tokio = { version = "1.43", features = ["rt-multi-thread"] }
