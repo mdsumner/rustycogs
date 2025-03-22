@@ -14,3 +14,7 @@ Config/rextendr/version: 0.3.1
 SystemRequirements: Rust 'cargo'; the crate 'aysnc-tiff' must compile without error
 URL: https://github.com/mdsumner/rustycogs
 BugReports: https://github.com/mdsumner/rustycogs/issues
+Imports: 
+    gdalraster,
+    grout
+Remotes: hypertidy/grout

@@ -1,12 +1,14 @@
 use async_tiff::{decoder::DecoderRegistry, TIFF};
 use extendr_api::prelude::*;
 //use async_tiff::decoder::DecoderRegistry;
-use async_tiff::reader::{AsyncFileReader, ObjectReader};
+use async_tiff::reader::{
+//AsyncFileReader,
+ObjectReader};
 use tokio::runtime::{Builder, Runtime};
 
 //use std::io::BufReader;
 use std::{
-    cell::OnceCell,
+    //cell::OnceCell,
     sync::{Arc, OnceLock},
 };
 //use super::*;
@@ -26,10 +28,9 @@ fn get_rt() -> &'static Runtime {
 }
 
 /// Return string `"Hello world!"` to R.
-/// @export
 #[extendr]
-fn rusty(file: String) -> Raw {
-    let dir = "/tiff/";
+fn rusty_rs(file: String, dir: String, tile_i: u32, tile_j: u32) -> Raw {
+    //let dir = "/tiff/";
     let path = object_store::path::Path::parse(file).unwrap();
     let store = Arc::new(LocalFileSystem::new_with_prefix(dir).unwrap());
     let reader = Arc::new(ObjectReader::new(store, path));
@@ -44,10 +45,12 @@ fn rusty(file: String) -> Raw {
     let ifd = &ifds[0];
     let decoder_registry = DecoderRegistry::default();
     let tile = rt
-        .block_on(ifd.fetch_tile(0, 0, reader.as_ref()))
+        .block_on(ifd.fetch_tile(tile_i.try_into().unwrap(), tile_j.try_into().unwrap(), reader.as_ref()))
         .expect("failed to get tile");
     let tile = tile.decode(&decoder_registry).expect("Failed to decode");
+    //std::fs::write("img.buf", tile).unwrap();
     Raw::from_bytes(&tile)
+
 }
 
 // example code from async-tiff
@@ -67,5 +70,5 @@ fn rusty(file: String) -> Raw {
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod rustycogs;
-    fn rusty;
+    fn rusty_rs;
 }
