@@ -1,5 +1,5 @@
-// We need to forward routine registration from C to Rust
-// to avoid the linker removing the static library.
+// We need to forward routine registration from the package to the library.
+// Packages that use extendr need to call `R_init_rustycogs` here.
 
 void R_init_rustycogs_extendr(void *dll);
 

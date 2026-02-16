@@ -1,5 +1,6 @@
 *.o
 *.so
 *.dll
+*.dylib
 target
 .cargo

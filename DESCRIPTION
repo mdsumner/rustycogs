@@ -1,27 +1,25 @@
 Package: rustycogs
-Title: Wrapper Around 'async-tiff' Rust 
-Version: 0.0.0.9000
-Authors@R: c(
- person("Michael", "Sumner", 
-            email = "mdsumner@gmail.com", 
-            role = c("aut", "cre"), 
-            comment = c(ORCID = "0000-0002-2471-7511")), 
- person(given = "Josiah",
-             family = "Parry",
-             role = "ctb",
-             comment = c(ORCID = "0000-0001-9910-865X"))
-   )
-Description: Reads tile data as raw bytes from a tiled TIFF on disk (scanline-oriented tiff not supported by the Rust lib afaik).
+Title: TIFF Virtualization via Rust
+Version: 0.0.1
+Authors@R: 
+    person("Michael", "Sumner", , "mdsumner@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-2471-7511"))
+Description: Extract byte-range chunk references from cloud-hosted TIFF and
+    COG files without reading pixel data. Uses the Rust 'async-tiff' and
+    'object_store' crates for async I/O across S3, GCS, Azure, HTTP, and local
+    storage. Returns a data frame of tile offsets and metadata suitable for
+    constructing Kerchunk or Zarr virtual stores.
 License: MIT + file LICENSE
-Encoding: UTF-8
-Language: es
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
-Config/rextendr/version: 0.3.1
-SystemRequirements: Rust 'cargo'; the crate 'aysnc-tiff' must compile without error
 URL: https://github.com/mdsumner/rustycogs
 BugReports: https://github.com/mdsumner/rustycogs/issues
-Imports: 
-    gdalraster,
-    grout
-Remotes: hypertidy/grout
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+SystemRequirements: Cargo (Rust's package manager), rustc
+Imports:
+    jsonlite
+Suggests:
+    arrow,
+    testthat (>= 3.0.0)
+Config/rextendr/version: 0.4.2
+Config/testthat/edition: 3

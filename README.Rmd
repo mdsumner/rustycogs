@@ -20,93 +20,66 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of rustycogs is ... another attempt learning to wrap Rust. 
 
-Very very WIP. Using grout and gdalraster for now to get the metadata so we can sanely plot the tile bytes. 
+Extract byte-range chunk references from cloud-hosted TIFF and COG files,
+entirely from R, without reading pixel data.
 
+Uses Rust crates [async-tiff](https://github.com/developmentseed/async-tiff)
+and [object_store](https://docs.rs/object_store/) (Apache arrow-rs) for async
+I/O across S3, GCS, Azure, HTTP, and local storage. Returns a data frame of
+tile offsets and metadata suitable for constructing
+[Kerchunk](https://fsspec.github.io/kerchunk/) or Zarr virtual stores.
 
-Obviously need some checks on the actual block size ...
+## Installation
 
-```R
-## gdal_translate /vsicurl/https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif?ovr=0 -outsize 4320 2160 -co TILED=YES gebco_4320.tif
+Requires a Rust toolchain. See `docs/rust-setup.md` for guidance.
 
-dsn <- "/tiff/gebco_4320.tif"
-devtools::load_all()
-tiles <- tile_scheme(dsn)
-
-plot(range(c(tiles$xmin, tiles$xmax)), range(c(tiles$ymin, tiles$ymax)))
-
-
-for (i in seq_along(tiles$tile)) {
-tx <- tiles[i, ]
-size <- unlist(tx[c("ncol", "nrow")]) |>  as.integer()
-tile_idx <- unlist(tx[c("tile_col", "tile_row")]) |> as.integer()
-bytes <- rusty(dsn, tile = tile_idx - 1)  ## 0-based internally, 1-based in grout
-
-ximage::ximage(matrix(readBin(bytes, "integer", size = 2L, n = prod(size)), size[2L], byrow = TRUE), 
-               unlist(tx[c("xmin", "xmax", "ymin", "ymax")]), col = hcl.colors(24), add = TRUE)
-
-}
-
+```r
+# Install from GitHub
+remotes::install_github("mdsumner/rustycogs")
 ```
 
-![alt text][id]
+## Usage
 
-[id]: Rplot.png "Title"
+```r
+library(rustycogs)
 
+# Scan a single cloud-hosted COG
+refs <- tiff_refs("s3://bucket/path/file.tif", region = "us-west-2", anon = TRUE)
 
-Is it really worth it? We automatically get type-conversion via GDAL ... though I guess we have spinup overhead for every read in the Rust, which is probably the differnce
+# Scan multiple files
+refs <- tiff_refs(c(path1, path2, path3), region = "us-west-2", anon = TRUE)
 
-```R
-dsn <- "/tiff/gebco_4320.tif"
-devtools::load_all()
-tiles <- tile_scheme(dsn)
+# Write to Parquet (for large reference sets)
+arrow::write_parquet(refs, "references.parquet")
 
-plot(range(c(tiles$xmin, tiles$xmax)), range(c(tiles$ymin, tiles$ymax)))
-
-system.time({
-for (i in seq_along(tiles$tile)) {
-  tx <- tiles[i, ]
-  size <- unlist(tx[c("ncol", "nrow")]) |>  as.integer()
-  tile_idx <- unlist(tx[c("tile_col", "tile_row")]) |> as.integer()
-  bytes <- rusty(dsn, tile = tile_idx - 1)  ## 0-based internally, 1-based in grout
-}
-})
-# user  system elapsed 
-# 0.593   0.684   1.368
-
-system.time({
-  ds <- new(gdalraster::GDALRaster, dsn)
-  for (i in seq_along(tiles$tile)) {
-    tx <- tiles[i, ]
-    size <- unlist(tx[c("ncol", "nrow")]) |>  as.integer()
-    tile_offset <- unlist(tx[c("offset_x", "offset_y")]) |> as.integer()
-    values <- ds$read(band = 1L, xoff = tile_offset[1L], yoff = tile_offset[2L], 
-                      xsize = size[1L], ysize = size[2L], 
-                      out_xsize = size[1L], out_ysize = size[2L])
-                      plot(values); scan("", 1)
-    
-  }
-})
-
-#user  system elapsed 
-#0.056   0.000   0.056 
+# Or build Kerchunk V1 JSON
+kc <- refs_to_kerchunk(refs)
+jsonlite::write_json(kc, "references.json", auto_unbox = TRUE)
 ```
 
+## What comes back
 
-Do it with spinup for every read, so yes we can compete with GDAL if we keep the reader open in Rust ;). Not sure I get the compulsion though, because we can parallelize the read with GDAL too and not have to rewrite everything. 
-
-```R
-system.time({
-  for (i in seq_along(tiles$tile)) {
-    tx <- tiles[i, ]
-    size <- unlist(tx[c("ncol", "nrow")]) |>  as.integer()
-    tile_offset <- unlist(tx[c("offset_x", "offset_y")]) |> as.integer()
-    values <- vapour::vapour_read_raster(dsn, window = c(tile_offset[1L], tile_offset[2L], size))
-    
-
-  }
-})
-user  system elapsed 
-1.010   0.020   1.029
 ```
+path | ifd | tile_col | tile_row | offset | length | image_w | image_h |
+tile_w | tile_h | dtype | compression | bits_per_sample | samples_per_pixel |
+crs_epsg
+```
+
+Each row is one tile in one IFD of one file. The `offset` and `length` columns
+are the byte range in the source file. Together with `path`, this is everything
+needed to construct a virtual Zarr or Kerchunk reference.
+
+## Design
+
+See `docs/` for design documents recording the evolution from the initial
+two-package approach (rustycogs + robstore) to the current streamlined
+single-package design.
+
+## Related
+
+- [vapour](https://github.com/hypertidy/vapour) — GDAL-based raster/vector reading
+- [grout](https://github.com/hypertidy/grout) — tile scheme calculations
+- [gdalraster](https://github.com/USDAForestService/gdalraster) — GDAL bindings for R
+- [async-tiff](https://github.com/developmentseed/async-tiff) — the Rust crate powering this
+- [virtual-tiff](https://github.com/virtual-zarr/virtual-tiff) — Python equivalent using async-tiff
