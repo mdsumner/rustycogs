@@ -20,7 +20,7 @@ NULL
 #'   offset, length, image_w, image_h, tile_w, tile_h, dtype,
 #'   compression, bits_per_sample, samples_per_pixel, crs_epsg.
 #' @export
-tiff_refs <- function(paths, region, anon) .Call(wrap__tiff_refs, paths, region, anon)
+tiff_refs <- function(paths, region = "", anon = TRUE) .Call(wrap__tiff_refs, paths, region, anon)
 
 
 # nolint end

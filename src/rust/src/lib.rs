@@ -195,10 +195,10 @@ async fn scan_one_file(
         let dtype_str = format_dtype(&sample_fmt, &bps);
         let bps_first = bps.first().copied().unwrap_or(8) as i32;
 
-        // GeoTIFF EPSG — projected_type is a field, not a method
+        // GeoTIFF EPSG — try projected_type first, fall back to geographic_type
         let epsg: i32 = ifd.geo_key_directory()
-            .and_then(|geo| geo.projected_type)
-            .map(|pt| pt as i32)
+            .and_then(|geo| geo.projected_type.or(geo.geographic_type))
+            .map(|code| code as i32)
             .unwrap_or(i32::MIN);
 
         // tile_offsets() / tile_byte_counts() return Option<&[u64]>

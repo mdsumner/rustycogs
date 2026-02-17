@@ -26,16 +26,31 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
 
   compressor <- tiff_compression_to_zarr(r1$compression)
 
-  zarray <- jsonlite::toJSON(list(
+  # Build zarray list — use explicit null for no compressor so it
+  # serializes as "compressor": null rather than being dropped
+  zarray_list <- list(
     zarr_format = 2L,
     shape = shape,
     chunks = chunks,
     dtype = r1$dtype,
-    compressor = compressor,
     fill_value = 0L,
-    order = "C",
-    filters = NULL
-  ), auto_unbox = TRUE)
+    order = "C"
+  )
+
+  # compressor and filters need explicit handling for JSON null
+  if (is.null(compressor)) {
+    # Write manually to get "compressor": null
+    zarray_json <- jsonlite::toJSON(zarray_list, auto_unbox = TRUE)
+    # Insert compressor and filters fields
+    zarray <- sub("\\}$",
+                  ',"compressor":null,"filters":null}',
+                  as.character(zarray_json))
+  } else {
+    zarray_list$compressor <- compressor
+    zarray <- as.character(
+      jsonlite::toJSON(c(zarray_list, list(filters = NULL)),
+                       auto_unbox = TRUE, null = "null"))
+  }
 
   # Build refs: "var/row.col" -> [path, offset, length]
   ref_list <- list(
@@ -58,17 +73,17 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
 #' @return A list describing the Zarr compressor, or NULL for no compression.
 #' @keywords internal
 tiff_compression_to_zarr <- function(code) {
-  # TIFF compression tag values:
-  # 1 = None, 5 = LZW, 7 = JPEG, 8 = Deflate/zlib,
-  # 32773 = PackBits, 34712 = JPEG2000, 50000 = Zstd
-  switch(as.character(code),
-    "1"     = NULL,
-    "8"     = list(id = "zlib", level = 6L),
-    "32946" = list(id = "zlib", level = 6L),  # Deflate (Adobe)
-    "5"     = list(id = "lzw"),  # Note: not standard in zarr-python numcodecs
-    "7"     = list(id = "jpeg"),
-    "50000" = list(id = "zstd", level = 3L),
-    # Default: report as raw/null and let downstream handle it
-    NULL
+  # code is a string from Debug formatting of async-tiff's CompressionMethod enum
+  # e.g. "Deflate", "Lzw", "Jpeg", "None", "Zstd"
+  switch(tolower(code),
+         "none"          = NULL,
+         "uncompressed"  = NULL,
+         "deflate"       = list(id = "zlib", level = 6L),
+         "lzw"           = list(id = "lzw"),
+         "jpeg"          = list(id = "jpeg"),
+         "zstd"          = list(id = "zstd", level = 3L),
+         "webp"          = list(id = "webp"),
+         # Default: null and let downstream handle it
+         NULL
   )
 }

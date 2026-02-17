@@ -1,6 +1,6 @@
 Package: rustycogs
 Title: TIFF Virtualization via Rust
-Version: 0.0.1
+Version: 0.0.1.9001
 Authors@R: 
     person("Michael", "Sumner", , "mdsumner@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-2471-7511"))
