@@ -31,7 +31,7 @@ cat("--- A) rustycogs::tiff_tile() ---\n")
 
 # First call includes TIFF open + metadata read
 t_a1 <- system.time({
-  tile <- tiff_tile(url_bathy, ifd_index = 0L, col = 0L, row = 0L, region = "", anon  = TRUE)
+  tile <- tiff_tile(url_bathy, ifd_index = 0L, col = 0L, row = 0L)
 })
 cat(sprintf("  Bathy tile (0,0): %.3fs elapsed, dim=%s, dtype=%s\n",
             t_a1["elapsed"], paste(tile$dim, collapse = "x"), tile$dtype))

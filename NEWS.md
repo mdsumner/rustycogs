@@ -1,3 +1,7 @@
+# rustycogs (dev)
+
+* Added concurrency control with default setting at 16. 
+
 # rustycogs 0.1.0
 
 Initial release. TIFF/COG metadata scanning and tile decoding from R via

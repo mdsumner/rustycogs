@@ -20,7 +20,6 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-
 Extract byte-range chunk references and decode tiles from cloud-hosted TIFF
 and COG files, entirely from R, without Python or GDAL.
 

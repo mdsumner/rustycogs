@@ -4,7 +4,7 @@
 \alias{tiff_refs}
 \title{Extract tile byte-range references from TIFF/COG files.}
 \usage{
-tiff_refs(paths, region, anon)
+tiff_refs(paths, region, anon, concurrency)
 }
 \arguments{
 \item{paths}{Character vector of file paths or URLs
@@ -13,6 +13,8 @@ tiff_refs(paths, region, anon)
 \item{region}{Optional AWS region string (e.g. "us-west-2").}
 
 \item{anon}{Logical, use anonymous/unsigned requests. Default FALSE.}
+
+\item{concurrency}{Integer, max concurrent file scans. Default 16.}
 }
 \value{
 A data.frame with columns: path, ifd, tile_col, tile_row,

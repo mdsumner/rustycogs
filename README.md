@@ -1,32 +1,22 @@
-
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
 # rustycogs
 
-<!-- badges: start -->
+Extract byte-range chunk references and decode tiles from cloud-hosted TIFF
+and COG files, entirely from R, without Python or GDAL.
 
-<!-- badges: end -->
-
-Extract byte-range chunk references and decode tiles from cloud-hosted
-TIFF and COG files, entirely from R, without Python or GDAL.
-
-Uses Rust crates
-[async-tiff](https://github.com/developmentseed/async-tiff) and
-[object_store](https://docs.rs/object_store/) (Apache arrow-rs) for
-async I/O across S3, GCS, Azure, HTTP, and local storage.
+Uses Rust crates [async-tiff](https://github.com/developmentseed/async-tiff)
+and [object_store](https://docs.rs/object_store/) (Apache arrow-rs) for async
+I/O across S3, GCS, Azure, HTTP, and local storage.
 
 Two modes:
 
-- **Scan** (`tiff_refs`): extract tile byte-range references for
-  Kerchunk/Zarr virtual stores
-- **Decode** (`tiff_tile`, `tiff_tiles`): fetch and decompress pixel
-  data directly
+- **Scan** (`tiff_refs`): extract tile byte-range references for Kerchunk/Zarr virtual stores
+- **Decode** (`tiff_tile`, `tiff_tiles`): fetch and decompress pixel data directly
 
 ## Installation
 
 Requires a Rust toolchain. See `docs/rust-setup.md` for guidance.
 
-``` r
+```r
 remotes::install_github("hypertidy/rustycogs")
 ```
 
@@ -34,7 +24,7 @@ remotes::install_github("hypertidy/rustycogs")
 
 ### Scan tile references
 
-``` r
+```r
 library(rustycogs)
 
 # Scan a cloud-hosted COG — returns byte offsets for every tile in every IFD
@@ -50,7 +40,7 @@ writeLines(kc, "references.json")
 
 ### Decode tiles
 
-``` r
+```r
 # Fetch and decode a single tile (returns raw pixel values)
 tile <- tiff_tile("https://example.com/cog.tif", ifd_index = 0, col = 0, row = 0)
 m <- tile_to_array(tile)
@@ -63,9 +53,9 @@ tiles <- tiff_tiles("https://example.com/cog.tif",
 
 ### GDAL Kerchunk round-trip
 
-The Kerchunk JSON output is compatible with GDAL \>= 3.8’s Zarr driver:
+The Kerchunk JSON output is compatible with GDAL >= 3.8's Zarr driver:
 
-``` r
+```r
 # 1. Scan (fast — metadata only)
 refs <- tiff_refs("https://example.com/big.tif")
 
@@ -80,58 +70,25 @@ r <- terra::rast("ZARR:refs.json")
 
 ### tiff_refs
 
-    path | ifd | tile_col | tile_row | offset | length | image_w | image_h |
-    tile_w | tile_h | dtype | compression | bits_per_sample | samples_per_pixel |
-    crs_epsg
+```
+path | ifd | tile_col | tile_row | offset | length | image_w | image_h |
+tile_w | tile_h | dtype | compression | bits_per_sample | samples_per_pixel |
+crs_epsg
+```
 
 Each row is one tile in one IFD of one file.
 
 ### tiff_tile / tiff_tiles
 
-A list with: - `data`: numeric vector of decoded pixel values - `dim`:
-integer vector `c(height, width)` or `c(height, width, bands)` -
-`dtype`: numpy-style type string (`"<f4"`, `"<u2"`, etc.)
-
-### Or we can go generic
-
-Assuming we know about Deflate/gzip, 512x512 tiling (all in the refs
-table) we can do
-
-``` r
-library(rustycogs)
-refs <- tiff_refs("https://s3.ap-southeast-2.amazonaws.com/ausseabed-public-warehouse-bathymetry/L3/6009f454-290d-4c9a-a43d-00b254681696/Australian_Bathymetry_and_Topography_2023_250m_MSL_cog.tif", region = "", anon = TRUE)
-tile_via_vsi <- function(refs, idx = 1, dsn_prefix = "/vsicurl/") {
-  r <- refs[idx, ]
-  vsi <- new(gdalraster::VSIFile, paste0(dsn_prefix, r$path))
-  vsi$seek(r$offset, gdalraster::SEEK_SET)
-  bytes <- vsi$read(r$length)
-  vsi$close()
-  uncomp <- memDecompress(bytes, "gzip")  # or switch on r$compression
-  readBin(uncomp, "numeric", n = r$tile_w * r$tile_h, size = r$bits_per_sample / 8)
-}
-
-## overview 5 has 4 tiles
-tail(refs[,2:6], 5)
-#>      ifd tile_col tile_row   offset length
-#> 3491   4        3        2 10873651 445133
-#> 3492   5        0        0    44388 920443
-#> 3493   5        1        0   964839 906069
-#> 3494   5        0        1  1870916 234626
-#> 3495   5        1        1  2105550 234953
-tilevals <- tile_via_vsi(refs[nrow(refs) -3, ])
-ximage::ximage(matrix(tilevals, 512L, byrow = TRUE), col = hcl.colors(24), breaks = quantile(tilevals, seq(0, 1, length.out = 25)))
-```
-
-<img src="man/figures/README-generic-1.png" alt="" width="100%" />
+A list with:
+- `data`: numeric vector of decoded pixel values
+- `dim`: integer vector `c(height, width)` or `c(height, width, bands)`
+- `dtype`: numpy-style type string (`"<f4"`, `"<u2"`, etc.)
 
 ## Related
 
-- [vapour](https://github.com/hypertidy/vapour) — GDAL-based
-  raster/vector reading
+- [vapour](https://github.com/hypertidy/vapour) — GDAL-based raster/vector reading
 - [grout](https://github.com/hypertidy/grout) — tile scheme calculations
-- [gdalraster](https://github.com/USDAForestService/gdalraster) — GDAL
-  bindings for R
-- [async-tiff](https://github.com/developmentseed/async-tiff) — the Rust
-  crate powering this
-- [virtual-tiff](https://github.com/virtual-zarr/virtual-tiff) — Python
-  equivalent using async-tiff
+- [gdalraster](https://github.com/USDAForestService/gdalraster) — GDAL bindings for R
+- [async-tiff](https://github.com/developmentseed/async-tiff) — the Rust crate powering this
+- [virtual-tiff](https://github.com/virtual-zarr/virtual-tiff) — Python equivalent using async-tiff

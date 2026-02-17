@@ -16,11 +16,12 @@ NULL
 #'   (s3://, gs://, az://, http://, https://, or local paths).
 #' @param region Optional AWS region string (e.g. "us-west-2").
 #' @param anon Logical, use anonymous/unsigned requests. Default FALSE.
+#' @param concurrency Integer, max concurrent file scans. Default 16.
 #' @return A data.frame with columns: path, ifd, tile_col, tile_row,
 #'   offset, length, image_w, image_h, tile_w, tile_h, dtype,
 #'   compression, bits_per_sample, samples_per_pixel, crs_epsg.
 #' @export
-tiff_refs <- function(paths, region, anon) .Call(wrap__tiff_refs, paths, region, anon)
+tiff_refs <- function(paths, region, anon, concurrency) .Call(wrap__tiff_refs, paths, region, anon, concurrency)
 
 #' Fetch and decode a single tile from a TIFF/COG file.
 #'

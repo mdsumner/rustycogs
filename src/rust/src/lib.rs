@@ -1,6 +1,7 @@
 use extendr_api::prelude::*;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use futures::stream::{self, StreamExt};
 
 // ── Store construction ──────────────────────────────────────────────
 //
@@ -129,6 +130,24 @@ impl RefColumns {
             crs_epsg: Vec::new(),
         }
     }
+
+    fn extend(&mut self, other: RefColumns) {
+        self.path.extend(other.path);
+        self.ifd.extend(other.ifd);
+        self.tile_col.extend(other.tile_col);
+        self.tile_row.extend(other.tile_row);
+        self.offset.extend(other.offset);
+        self.length.extend(other.length);
+        self.image_w.extend(other.image_w);
+        self.image_h.extend(other.image_h);
+        self.tile_w.extend(other.tile_w);
+        self.tile_h.extend(other.tile_h);
+        self.dtype.extend(other.dtype);
+        self.compression.extend(other.compression);
+        self.bits_per_sample.extend(other.bits_per_sample);
+        self.samples_per_pixel.extend(other.samples_per_pixel);
+        self.crs_epsg.extend(other.crs_epsg);
+    }
 }
 
 // Format SampleFormat + bits_per_sample into a NumPy/Zarr dtype string
@@ -154,8 +173,7 @@ async fn scan_one_file(
     url_str: &str,
     region: Option<&str>,
     anon: bool,
-    cols: &mut RefColumns,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<RefColumns, String> {
     let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
 
     let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
@@ -167,6 +185,8 @@ async fn scan_one_file(
         .await
         .map_err(|e| format!("Failed to read IFDs from {}: {}", url_str, e))?;
     let tiff = async_tiff::TIFF::new(ifds, meta_reader.endianness());
+
+    let mut cols = RefColumns::new();
 
     for (ifd_idx, ifd) in tiff.ifds().iter().enumerate() {
         let img_w = ifd.image_width();
@@ -237,7 +257,7 @@ async fn scan_one_file(
         }
     }
 
-    Ok(())
+    Ok(cols)
 }
 
 // ── Exported R function ─────────────────────────────────────────────
@@ -248,17 +268,19 @@ async fn scan_one_file(
 ///   (s3://, gs://, az://, http://, https://, or local paths).
 /// @param region Optional AWS region string (e.g. "us-west-2").
 /// @param anon Logical, use anonymous/unsigned requests. Default FALSE.
+/// @param concurrency Integer, max concurrent file scans. Default 16.
 /// @return A data.frame with columns: path, ifd, tile_col, tile_row,
 ///   offset, length, image_w, image_h, tile_w, tile_h, dtype,
 ///   compression, bits_per_sample, samples_per_pixel, crs_epsg.
 /// @export
 #[extendr]
-fn tiff_refs(paths: Strings, region: Nullable<String>, anon: bool) -> Robj {
+fn tiff_refs(paths: Strings, region: Nullable<String>, anon: bool, concurrency: i32) -> Robj {
     let region_str: Option<String> = match region {
         Nullable::NotNull(r) => Some(r),
         Nullable::Null => None,
     };
     let region_ref = region_str.as_deref();
+    let conc = if concurrency < 1 { 1usize } else { concurrency as usize };
 
     let rt = match Runtime::new() {
         Ok(rt) => rt,
@@ -284,16 +306,31 @@ fn tiff_refs(paths: Strings, region: Nullable<String>, anon: bool) -> Robj {
         }
     };
 
-    let mut cols = RefColumns::new();
+    // Collect paths to owned Strings for the async tasks
+    let owned_paths: Vec<String> = paths.iter().map(|p| p.as_str().to_string()).collect();
 
-    let errors: Vec<String> = rt.block_on(async {
+    let (cols, errors) = rt.block_on(async {
+        let results: Vec<std::result::Result<RefColumns, String>> = stream::iter(owned_paths)
+            .map(|path| {
+                // Clone region into each future to avoid lifetime issues
+                let region_owned = region_ref.map(|s| s.to_string());
+                async move {
+                    scan_one_file(&path, region_owned.as_deref(), anon).await
+                }
+            })
+            .buffer_unordered(conc)
+            .collect()
+            .await;
+
+        let mut merged = RefColumns::new();
         let mut errs = Vec::new();
-        for path in paths.iter() {
-            if let Err(e) = scan_one_file(path.as_str(), region_ref, anon, &mut cols).await {
-                errs.push(e);
+        for result in results {
+            match result {
+                Ok(file_cols) => merged.extend(file_cols),
+                Err(e) => errs.push(e),
             }
         }
-        errs
+        (merged, errs)
     });
 
     for e in &errors {
