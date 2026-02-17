@@ -22,7 +22,7 @@ test_that("refs_to_kerchunk produces valid structure", {
     tile_w = rep(256L, 4),
     tile_h = rep(256L, 4),
     dtype = rep("|u1", 4),
-    compression = rep(8L, 4),
+    compression = rep("Deflate", 4),
     bits_per_sample = rep(8L, 4),
     samples_per_pixel = rep(1L, 4),
     crs_epsg = rep(32618L, 4),

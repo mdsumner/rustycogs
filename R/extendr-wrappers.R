@@ -20,7 +20,34 @@ NULL
 #'   offset, length, image_w, image_h, tile_w, tile_h, dtype,
 #'   compression, bits_per_sample, samples_per_pixel, crs_epsg.
 #' @export
-tiff_refs <- function(paths, region = "", anon = TRUE) .Call(wrap__tiff_refs, paths, region, anon)
+tiff_refs <- function(paths, region, anon) .Call(wrap__tiff_refs, paths, region, anon)
+
+#' Fetch and decode a single tile from a TIFF/COG file.
+#'
+#' @param path File path or URL to the TIFF.
+#' @param ifd_index IFD index (0-based). Default 0 (full resolution).
+#' @param col Tile column (0-based).
+#' @param row Tile row (0-based).
+#' @param region Optional AWS region string.
+#' @param anon Logical, use anonymous requests. Default FALSE.
+#' @return A named list with components:
+#'   - `data`: numeric vector of decoded pixel values
+#'   - `dim`: integer vector c(height, width, bands)
+#'   - `dtype`: character string (e.g. "<f4", "<u2")
+#' @export
+tiff_tile <- function(path, ifd_index, col, row, region, anon) .Call(wrap__tiff_tile, path, ifd_index, col, row, region, anon)
+
+#' Fetch and decode multiple tiles as a batch.
+#'
+#' @param path File path or URL to the TIFF.
+#' @param ifd_index IFD index (0-based). Default 0 (full resolution).
+#' @param cols Integer vector of tile columns (0-based).
+#' @param rows Integer vector of tile rows (0-based).
+#' @param region Optional AWS region string.
+#' @param anon Logical, use anonymous requests. Default FALSE.
+#' @return A list of tile results, each with data, dim, and dtype.
+#' @export
+tiff_tiles <- function(path, ifd_index, cols, rows, region, anon) .Call(wrap__tiff_tiles, path, ifd_index, cols, rows, region, anon)
 
 
 # nolint end

@@ -2,4 +2,7 @@
 
 export(refs_to_kerchunk)
 export(tiff_refs)
+export(tiff_tile)
+export(tiff_tiles)
+export(tile_to_array)
 useDynLib(rustycogs, .registration = TRUE)

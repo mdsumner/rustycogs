@@ -43,8 +43,8 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
     zarray_json <- jsonlite::toJSON(zarray_list, auto_unbox = TRUE)
     # Insert compressor and filters fields
     zarray <- sub("\\}$",
-                  ',"compressor":null,"filters":null}',
-                  as.character(zarray_json))
+      ',"compressor":null,"filters":null}',
+      as.character(zarray_json))
   } else {
     zarray_list$compressor <- compressor
     zarray <- as.character(
@@ -76,14 +76,14 @@ tiff_compression_to_zarr <- function(code) {
   # code is a string from Debug formatting of async-tiff's CompressionMethod enum
   # e.g. "Deflate", "Lzw", "Jpeg", "None", "Zstd"
   switch(tolower(code),
-         "none"          = NULL,
-         "uncompressed"  = NULL,
-         "deflate"       = list(id = "zlib", level = 6L),
-         "lzw"           = list(id = "lzw"),
-         "jpeg"          = list(id = "jpeg"),
-         "zstd"          = list(id = "zstd", level = 3L),
-         "webp"          = list(id = "webp"),
-         # Default: null and let downstream handle it
-         NULL
+    "none"          = NULL,
+    "uncompressed"  = NULL,
+    "deflate"       = list(id = "zlib", level = 6L),
+    "lzw"           = list(id = "lzw"),
+    "jpeg"          = list(id = "jpeg"),
+    "zstd"          = list(id = "zstd", level = 3L),
+    "webp"          = list(id = "webp"),
+    # Default: null and let downstream handle it
+    NULL
   )
 }

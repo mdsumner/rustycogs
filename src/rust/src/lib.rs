@@ -323,7 +323,261 @@ fn tiff_refs(paths: Strings, region: Nullable<String>, anon: bool) -> Robj {
     )
 }
 
+// ── Single tile fetch + decode ──────────────────────────────────────
+
+/// Fetch and decode a single tile from a TIFF/COG file.
+///
+/// @param path File path or URL to the TIFF.
+/// @param ifd_index IFD index (0-based). Default 0 (full resolution).
+/// @param col Tile column (0-based).
+/// @param row Tile row (0-based).
+/// @param region Optional AWS region string.
+/// @param anon Logical, use anonymous requests. Default FALSE.
+/// @return A named list with components:
+///   - `data`: numeric vector of decoded pixel values
+///   - `dim`: integer vector c(height, width, bands)
+///   - `dtype`: character string (e.g. "<f4", "<u2")
+/// @export
+#[extendr]
+fn tiff_tile(
+    path: &str,
+    ifd_index: i32,
+    col: i32,
+    row: i32,
+    region: Nullable<String>,
+    anon: bool,
+) -> Robj {
+    let region_str: Option<String> = match region {
+        Nullable::NotNull(r) => Some(r),
+        Nullable::Null => None,
+    };
+    let region_ref = region_str.as_deref();
+
+    let rt = match Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            rprintln!("Error: Failed to create tokio runtime: {}", e);
+            return list!(data = Robj::from(Rfloat::na()), dim = Robj::from(0), dtype = "").into();
+        }
+    };
+
+    rt.block_on(async {
+        match fetch_decode_tile(path, ifd_index as usize, col as usize, row as usize, region_ref, anon).await {
+            Ok(tile_result) => tile_result,
+            Err(e) => {
+                rprintln!("Error: {}", e);
+                list!(data = Robj::from(Rfloat::na()), dim = Robj::from(0), dtype = "").into()
+            }
+        }
+    })
+}
+
+async fn fetch_decode_tile(
+    url_str: &str,
+    ifd_index: usize,
+    col: usize,
+    row: usize,
+    region: Option<&str>,
+    anon: bool,
+) -> std::result::Result<Robj, String> {
+    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
+
+    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
+    let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
+        .await
+        .map_err(|e| format!("Failed to open TIFF: {}", e))?;
+    let ifds = meta_reader.read_all_ifds(&cache)
+        .await
+        .map_err(|e| format!("Failed to read IFDs: {}", e))?;
+    let tiff = async_tiff::TIFF::new(ifds, meta_reader.endianness());
+
+    let ifd = tiff.ifds().get(ifd_index)
+        .ok_or_else(|| format!("IFD index {} out of range (file has {} IFDs)", ifd_index, tiff.ifds().len()))?;
+
+    // Fetch the compressed tile bytes
+    let tile = ifd.fetch_tile(col, row, &reader)
+        .await
+        .map_err(|e| format!("Failed to fetch tile ({},{}): {}", col, row, e))?;
+
+    // Decode the tile
+    let array = tile.decode(&Default::default())
+        .map_err(|e| format!("Failed to decode tile: {}", e))?;
+
+    // Decompose via into_inner(): (TypedArray, [usize; 3], Option<DataType>)
+    let (typed_data, shape, data_type) = array.into_inner();
+
+    let dtype_str = match data_type {
+        Some(async_tiff::DataType::UInt8) => "|u1",
+        Some(async_tiff::DataType::UInt16) => "<u2",
+        Some(async_tiff::DataType::UInt32) => "<u4",
+        Some(async_tiff::DataType::UInt64) => "<u8",
+        Some(async_tiff::DataType::Int8) => "|i1",
+        Some(async_tiff::DataType::Int16) => "<i2",
+        Some(async_tiff::DataType::Int32) => "<i4",
+        Some(async_tiff::DataType::Int64) => "<i8",
+        Some(async_tiff::DataType::Float32) => "<f4",
+        Some(async_tiff::DataType::Float64) => "<f8",
+        _ => "|u1",  // fallback: treat unknown/None/Bool as uint8
+    };
+
+    // Convert TypedArray to R numeric vector
+    let data_vec: Vec<f64> = match typed_data {
+        async_tiff::TypedArray::UInt8(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::UInt16(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::UInt32(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::UInt64(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Int8(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Int16(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Int32(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Int64(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Float32(arr) => arr.iter().map(|&v| v as f64).collect(),
+        async_tiff::TypedArray::Float64(arr) => arr.iter().copied().collect(),
+    };
+
+    let dim: Vec<i32> = shape.iter().map(|&d| d as i32).collect();
+
+    Ok(list!(
+        data = data_vec,
+        dim = dim,
+        dtype = dtype_str
+    ).into())
+}
+
+/// Fetch and decode multiple tiles as a batch.
+///
+/// @param path File path or URL to the TIFF.
+/// @param ifd_index IFD index (0-based). Default 0 (full resolution).
+/// @param cols Integer vector of tile columns (0-based).
+/// @param rows Integer vector of tile rows (0-based).
+/// @param region Optional AWS region string.
+/// @param anon Logical, use anonymous requests. Default FALSE.
+/// @return A list of tile results, each with data, dim, and dtype.
+/// @export
+#[extendr]
+fn tiff_tiles(
+    path: &str,
+    ifd_index: i32,
+    cols: &[i32],
+    rows: &[i32],
+    region: Nullable<String>,
+    anon: bool,
+) -> Robj {
+    let region_str: Option<String> = match region {
+        Nullable::NotNull(r) => Some(r),
+        Nullable::Null => None,
+    };
+    let region_ref = region_str.as_deref();
+
+    if cols.len() != rows.len() {
+        rprintln!("Error: cols and rows must have the same length");
+        return list!().into();
+    }
+
+    let rt = match Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            rprintln!("Error: Failed to create tokio runtime: {}", e);
+            return list!().into();
+        }
+    };
+
+    rt.block_on(async {
+        // Open the TIFF once, fetch multiple tiles
+        let result = fetch_decode_tiles_batch(
+            path, ifd_index as usize, cols, rows, region_ref, anon
+        ).await;
+
+        match result {
+            Ok(tiles) => {
+                List::from_values(tiles).into_robj()
+            }
+            Err(e) => {
+                rprintln!("Error: {}", e);
+                list!().into()
+            }
+        }
+    })
+}
+
+async fn fetch_decode_tiles_batch(
+    url_str: &str,
+    ifd_index: usize,
+    cols: &[i32],
+    rows: &[i32],
+    region: Option<&str>,
+    anon: bool,
+) -> std::result::Result<Vec<Robj>, String> {
+    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
+
+    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
+    let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
+        .await
+        .map_err(|e| format!("Failed to open TIFF: {}", e))?;
+    let ifds = meta_reader.read_all_ifds(&cache)
+        .await
+        .map_err(|e| format!("Failed to read IFDs: {}", e))?;
+    let tiff = async_tiff::TIFF::new(ifds, meta_reader.endianness());
+
+    let ifd = tiff.ifds().get(ifd_index)
+        .ok_or_else(|| format!("IFD index {} out of range", ifd_index))?;
+
+    let mut results: Vec<Robj> = Vec::with_capacity(cols.len());
+
+    // Fetch tiles — these could be made concurrent with join_all later
+    for (c, r) in cols.iter().zip(rows.iter()) {
+        let tile = ifd.fetch_tile(*c as usize, *r as usize, &reader)
+            .await
+            .map_err(|e| format!("Failed to fetch tile ({},{}): {}", c, r, e))?;
+
+        let array = tile.decode(&Default::default())
+            .map_err(|e| format!("Failed to decode tile ({},{}): {}", c, r, e))?;
+
+        let (typed_data, shape, data_type) = array.into_inner();
+
+        let dtype_str = match data_type {
+            Some(async_tiff::DataType::UInt8) => "|u1",
+            Some(async_tiff::DataType::UInt16) => "<u2",
+            Some(async_tiff::DataType::UInt32) => "<u4",
+            Some(async_tiff::DataType::UInt64) => "<u8",
+            Some(async_tiff::DataType::Int8) => "|i1",
+            Some(async_tiff::DataType::Int16) => "<i2",
+            Some(async_tiff::DataType::Int32) => "<i4",
+            Some(async_tiff::DataType::Int64) => "<i8",
+            Some(async_tiff::DataType::Float32) => "<f4",
+            Some(async_tiff::DataType::Float64) => "<f8",
+            _ => "|u1",
+        };
+
+        let data_vec: Vec<f64> = match typed_data {
+            async_tiff::TypedArray::UInt8(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::UInt16(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::UInt32(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::UInt64(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Int8(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Int16(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Int32(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Int64(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Float32(arr) => arr.iter().map(|&v| v as f64).collect(),
+            async_tiff::TypedArray::Float64(arr) => arr.iter().copied().collect(),
+        };
+
+        let dim: Vec<i32> = shape.iter().map(|&d| d as i32).collect();
+
+        results.push(list!(
+            data = data_vec,
+            dim = dim,
+            dtype = dtype_str
+        ).into());
+    }
+
+    Ok(results)
+}
+
 extendr_module! {
     mod rustycogs;
     fn tiff_refs;
+    fn tiff_tile;
+    fn tiff_tiles;
 }
