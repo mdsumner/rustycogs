@@ -106,6 +106,7 @@ A list with:
 - `dim`: integer vector `c(height, width)` or `c(height, width, bands)`
 - `dtype`: numpy-style type string (`"<f4"`, `"<u2"`, etc.)
 
+
 ### Or we can go generic
 
 Assuming we know about Deflate/gzip, 512x512 tiling (all in the refs table) we can do
