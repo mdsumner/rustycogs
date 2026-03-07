@@ -15,39 +15,60 @@ NULL
 #' @param paths Character vector of file paths or URLs
 #'   (s3://, gs://, az://, http://, https://, or local paths).
 #' @param region Optional AWS region string (e.g. "us-west-2").
-#' @param anon Logical, use anonymous/unsigned requests. Default FALSE.
-#' @param concurrency Integer, max concurrent file scans. Default 16.
-#' @return A data.frame with columns: path, ifd, tile_col, tile_row,
+#' @param anon Logical, use anonymous/unsigned requests.
+#' @param concurrency Integer, max concurrent file scans.
+#' @return A data.frame with columns path, ifd, tile_col, tile_row,
 #'   offset, length, image_w, image_h, tile_w, tile_h, dtype,
-#'   compression, bits_per_sample, samples_per_pixel, crs_epsg.
-#' @export
+#'   compression, bits_per_sample, samples_per_pixel, crs_epsg,
+#'   gdal_nodata, planar_configuration, scale_x, scale_y,
+#'   origin_x, origin_y.
 tiff_refs <- function(paths, region, anon, concurrency) .Call(wrap__tiff_refs, paths, region, anon, concurrency)
+
+#' Summarise IFD-level metadata from TIFF/COG files.
+#'
+#' Returns one row per IFD per file — no tile explosion. Useful for
+#' understanding file structure before deciding which tiles to fetch.
+#'
+#' @param paths Character vector of file paths or URLs.
+#' @param region Optional AWS region string.
+#' @param anon Logical, use anonymous requests.
+#' @param concurrency Integer, max concurrent file scans.
+#' @return A data.frame with one row per IFD containing image dimensions,
+#'   tile grid size, dtype, compression, photometric interpretation,
+#'   predictor, planar configuration, CRS, nodata, and geotransform.
+tiff_ifd_info <- function(paths, region, anon, concurrency) .Call(wrap__tiff_ifd_info, paths, region, anon, concurrency)
+
+#' Internal entry point for tiff_read_tiles().
+#'
+#' The public R API is the [tiff_read_tiles()] wrapper in `R/rustycogs.R`
+#' which accepts a refs data frame and returns it with a `data` list-column.
+#' This function takes the raw column vectors directly.
+#'
+#' @keywords internal
+tiff_read_tiles <- function(paths, ifd_indices, cols, rows, region, anon, concurrency) .Call(wrap__tiff_read_tiles, paths, ifd_indices, cols, rows, region, anon, concurrency)
 
 #' Fetch and decode a single tile from a TIFF/COG file.
 #'
 #' @param path File path or URL to the TIFF.
-#' @param ifd_index IFD index (0-based). Default 0 (full resolution).
+#' @param ifd_index IFD index (0-based).
 #' @param col Tile column (0-based).
 #' @param row Tile row (0-based).
 #' @param region Optional AWS region string.
-#' @param anon Logical, use anonymous requests. Default FALSE.
-#' @return A named list with components:
-#'   - `data`: numeric vector of decoded pixel values
-#'   - `dim`: integer vector c(height, width, bands)
-#'   - `dtype`: character string (e.g. "<f4", "<u2")
-#' @export
+#' @param anon Logical, use anonymous requests.
+#' @return A named list with data, dim, dtype.
 tiff_tile <- function(path, ifd_index, col, row, region, anon) .Call(wrap__tiff_tile, path, ifd_index, col, row, region, anon)
 
-#' Fetch and decode multiple tiles as a batch.
+#' Fetch and decode multiple tiles from a TIFF/COG file.
+#'
+#' Uses ifd.fetch_tiles() for a single vectorized range request.
 #'
 #' @param path File path or URL to the TIFF.
-#' @param ifd_index IFD index (0-based). Default 0 (full resolution).
+#' @param ifd_index IFD index (0-based).
 #' @param cols Integer vector of tile columns (0-based).
 #' @param rows Integer vector of tile rows (0-based).
 #' @param region Optional AWS region string.
-#' @param anon Logical, use anonymous requests. Default FALSE.
-#' @return A list of tile results, each with data, dim, and dtype.
-#' @export
+#' @param anon Logical, use anonymous requests.
+#' @return A list of tile result lists, each with data, dim, dtype.
 tiff_tiles <- function(path, ifd_index, cols, rows, region, anon) .Call(wrap__tiff_tiles, path, ifd_index, cols, rows, region, anon)
 
 
