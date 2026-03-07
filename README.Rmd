@@ -48,31 +48,27 @@ install.packages("rustycogs", repos = "https://hypertidy.r-universe.dev")
 
 ### Inspect file structure
 
-```r
+```{r gebco}
 library(rustycogs)
 
 # One row per IFD — fast way to understand a file before fetching tiles
 tiff_ifd_info("https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif")
-#   ifd is_tiled image_w image_h tile_w tile_h n_tiles_x n_tiles_y dtype compression
-# 1   0     TRUE   86400   43200    512    512       169        85   <i2     Deflate
-# 2   1     TRUE   43200   21600    512    512        85        43   <i2     Deflate
-# ...
-#   crs_epsg gdal_nodata    scale_x     scale_y origin_x origin_y
-# 1     4326      -32767 0.00416667 0.00416667     -180       90
+
 ```
 
 ### Scan tile references
 
-```r
+```{r s3}
 # Scan a COG — one row per tile per IFD
-refs <- tiff_refs("s3://bucket/file.tif", region = "ap-southeast-2", anon = TRUE)
+refs <- tiff_refs("s3://sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif", region = "us-west-2", anon = TRUE)
+## or just
+#refs <- tiff_refs(""https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif", 
+# region = "", anon = TRUE)
 
-# Write to Parquet for large reference sets
-arrow::write_parquet(refs, "references.parquet")
+## Write to Parquet for large reference sets
+#arrow::write_parquet(refs, "references.parquet")
 
-# Build Kerchunk V1 JSON — fill_value from gdal_nodata automatically
-kc <- refs_to_kerchunk(refs)
-jsonlite::write_json(kc, "references.json", auto_unbox = TRUE)
+
 ```
 
 ### Fetch and decode tiles
@@ -93,13 +89,6 @@ m <- tile_to_array(tile)
 ximage::ximage(m)
 ```
 
-### Kerchunk round-trip via GDAL
-
-```r
-refs <- tiff_refs("https://example.com/big.tif")
-jsonlite::write_json(refs_to_kerchunk(refs), "refs.json", auto_unbox = TRUE)
-terra::rast("ZARR:refs.json")
-```
 
 ## What comes back
 

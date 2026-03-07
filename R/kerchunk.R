@@ -7,7 +7,8 @@
 #' @param refs Data frame from [tiff_refs()].
 #' @param var_name Name for the Zarr variable. Default `"data"`.
 #' @return A list in Kerchunk V1 format.
-#' @export
+#' @noRd
+#' @keywords internal
 #' @examples
 #' \dontrun{
 #' refs <- tiff_refs("s3://bucket/file.tif", anon = TRUE)
@@ -82,6 +83,7 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
 #'   formatting (e.g. `"Deflate"`, `"Lzw"`, `"None"`, `"Zstd"`).
 #' @return A list describing the Zarr compressor, or `NULL` for no compression.
 #' @keywords internal
+#' @noRd
 tiff_compression_to_zarr <- function(code) {
   switch(tolower(code),
     "none"          = NULL,

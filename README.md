@@ -46,26 +46,61 @@ library(rustycogs)
 
 # One row per IFD — fast way to understand a file before fetching tiles
 tiff_ifd_info("https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif")
-#   ifd is_tiled image_w image_h tile_w tile_h n_tiles_x n_tiles_y dtype compression
-# 1   0     TRUE   86400   43200    512    512       169        85   <i2     Deflate
-# 2   1     TRUE   43200   21600    512    512        85        43   <i2     Deflate
-# ...
-#   crs_epsg gdal_nodata    scale_x     scale_y origin_x origin_y
-# 1     4326      -32767 0.00416667 0.00416667     -180       90
+#>                                                           path ifd is_tiled
+#> 1 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   0     TRUE
+#> 2 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   1     TRUE
+#> 3 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   2     TRUE
+#> 4 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   3     TRUE
+#> 5 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   4     TRUE
+#> 6 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   5     TRUE
+#> 7 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   6     TRUE
+#> 8 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   7     TRUE
+#> 9 https://projects.pawsey.org.au/idea-gebco-tif/GEBCO_2024.tif   8     TRUE
+#>   image_w image_h tile_w tile_h n_tiles_x n_tiles_y dtype compression
+#> 1   86400   43200    512    512       169        85   <i2     Deflate
+#> 2   43200   21600    512    512        85        43   <i2     Deflate
+#> 3   21600   10800    512    512        43        22   <i2     Deflate
+#> 4   10800    5400    512    512        22        11   <i2     Deflate
+#> 5    5400    2700    512    512        11         6   <i2     Deflate
+#> 6    2700    1350    512    512         6         3   <i2     Deflate
+#> 7    1350     675    512    512         3         2   <i2     Deflate
+#> 8     675     337    512    512         2         1   <i2     Deflate
+#> 9     337     168    512    512         1         1   <i2     Deflate
+#>   bits_per_sample samples_per_pixel photometric predictor planar_configuration
+#> 1              16                 1 BlackIsZero      None               Chunky
+#> 2              16                 1 BlackIsZero      None               Chunky
+#> 3              16                 1 BlackIsZero      None               Chunky
+#> 4              16                 1 BlackIsZero      None               Chunky
+#> 5              16                 1 BlackIsZero      None               Chunky
+#> 6              16                 1 BlackIsZero      None               Chunky
+#> 7              16                 1 BlackIsZero      None               Chunky
+#> 8              16                 1 BlackIsZero      None               Chunky
+#> 9              16                 1 BlackIsZero      None               Chunky
+#>   crs_epsg gdal_nodata     scale_x     scale_y origin_x origin_y
+#> 1     4326      -32767 0.004166667 0.004166667     -180       90
+#> 2       NA      -32767          NA          NA       NA       NA
+#> 3       NA      -32767          NA          NA       NA       NA
+#> 4       NA      -32767          NA          NA       NA       NA
+#> 5       NA      -32767          NA          NA       NA       NA
+#> 6       NA      -32767          NA          NA       NA       NA
+#> 7       NA      -32767          NA          NA       NA       NA
+#> 8       NA      -32767          NA          NA       NA       NA
+#> 9       NA      -32767          NA          NA       NA       NA
 ```
 
 ### Scan tile references
 
 ``` r
 # Scan a COG — one row per tile per IFD
-refs <- tiff_refs("s3://bucket/file.tif", region = "ap-southeast-2", anon = TRUE)
+refs <- tiff_refs("s3://sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif", region = "us-west-2", anon = TRUE)
+#> Warning: Failed to open TIFF s3://sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif: Object at location 55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif not found: Error performing GET https://s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif in 524.722502ms - Server returned non-2xx status code: 404 Not Found: <?xml version="1.0" encoding="UTF-8"?>
+#> <Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist</Message><BucketName>sentinel-2-c1-l2a</BucketName><RequestId>R0WPQZ2HBQCQNQ4S</RequestId><HostId>JC/FZM/8tWQ11CPHZ9dfiRJT41Yts4PkyX253FVaJ4T5+HaQdlQ1xmAgKCmR29n/69vf5hIrvIw=</HostId></Error>
+## or just
+#refs <- tiff_refs(""https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/55/G/DN/2026/2/S2C_T55GDN_20260227T000650_L2A/B04.tif", 
+# region = "", anon = TRUE)
 
-# Write to Parquet for large reference sets
-arrow::write_parquet(refs, "references.parquet")
-
-# Build Kerchunk V1 JSON — fill_value from gdal_nodata automatically
-kc <- refs_to_kerchunk(refs)
-jsonlite::write_json(kc, "references.json", auto_unbox = TRUE)
+## Write to Parquet for large reference sets
+#arrow::write_parquet(refs, "references.parquet")
 ```
 
 ### Fetch and decode tiles
@@ -84,14 +119,6 @@ arrays <- lapply(tiles, tile_to_array)
 tile <- tiff_tile("scene.tif", col = 0L, row = 0L)
 m <- tile_to_array(tile)
 ximage::ximage(m)
-```
-
-### Kerchunk round-trip via GDAL
-
-``` r
-refs <- tiff_refs("https://example.com/big.tif")
-jsonlite::write_json(refs_to_kerchunk(refs), "refs.json", auto_unbox = TRUE)
-terra::rast("ZARR:refs.json")
 ```
 
 ## What comes back

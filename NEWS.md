@@ -48,6 +48,8 @@
   vectorized range request to the object store rather than N sequential
   fetches. Significant speedup for large batches over HTTP/S3.
 
+* `refs_to_kerchunk()` has been internalized, it probably doesn't belong here. 
+
 # rustycogs 0.1.0
 
 Initial release. TIFF/COG metadata scanning and tile decoding from R via
