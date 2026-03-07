@@ -26,6 +26,15 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
 
   compressor <- tiff_compression_to_zarr(r1$compression)
 
+  # fill_value: use gdal_nodata if present, otherwise 0.
+  # gdal_nodata is stored as a string; coerce to numeric.
+  fill_value <- if (!is.null(r1$gdal_nodata) && !is.na(r1$gdal_nodata)) {
+    v <- suppressWarnings(as.numeric(r1$gdal_nodata))
+    if (is.na(v)) 0L else v
+  } else {
+    0L
+  }
+
   # Build zarray list — use explicit null for no compressor so it
   # serializes as "compressor": null rather than being dropped
   zarray_list <- list(
@@ -33,7 +42,7 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
     shape = shape,
     chunks = chunks,
     dtype = r1$dtype,
-    fill_value = 0L,
+    fill_value = fill_value,
     order = "C"
   )
 
@@ -69,12 +78,11 @@ refs_to_kerchunk <- function(refs, var_name = "data") {
 
 #' Map TIFF compression tag to Zarr compressor spec
 #'
-#' @param code Integer TIFF compression tag value.
-#' @return A list describing the Zarr compressor, or NULL for no compression.
+#' @param code Character string from async-tiff's compression enum Debug
+#'   formatting (e.g. `"Deflate"`, `"Lzw"`, `"None"`, `"Zstd"`).
+#' @return A list describing the Zarr compressor, or `NULL` for no compression.
 #' @keywords internal
 tiff_compression_to_zarr <- function(code) {
-  # code is a string from Debug formatting of async-tiff's CompressionMethod enum
-  # e.g. "Deflate", "Lzw", "Jpeg", "None", "Zstd"
   switch(tolower(code),
     "none"          = NULL,
     "uncompressed"  = NULL,
@@ -83,7 +91,6 @@ tiff_compression_to_zarr <- function(code) {
     "jpeg"          = list(id = "jpeg"),
     "zstd"          = list(id = "zstd", level = 3L),
     "webp"          = list(id = "webp"),
-    # Default: null and let downstream handle it
     NULL
   )
 }

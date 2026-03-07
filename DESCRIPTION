@@ -1,6 +1,6 @@
 Package: rustycogs
-Title: TIFF Virtualization via Rust
-Version: 0.1.0.9001
+Title: TIFF Virtualization and Decoding via Rust
+Version: 0.2.0
 Authors@R: 
     person("Michael", "Sumner", , "mdsumner@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-2471-7511"))
@@ -10,8 +10,8 @@ Description: Extract byte-range chunk references from cloud-hosted TIFF and
     storage. Returns a data frame of tile offsets and metadata suitable for
     constructing Kerchunk or Zarr virtual stores.
 License: MIT + file LICENSE
-URL: https://github.com/mdsumner/rustycogs
-BugReports: https://github.com/mdsumner/rustycogs/issues
+URL: https://github.com/hypertidy/rustycogs
+BugReports: https://github.com/hypertidy/rustycogs/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

@@ -1,0 +1,42 @@
+on:
+  schedule:
+    # 03:00 UTC daily
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+name: live-tests
+
+jobs:
+  live-tests:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      LIVE_TESTS: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/rust
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::testthat, any::jsonlite
+          needs: check
+
+      - name: Install package
+        run: R CMD INSTALL .
+
+      - name: Run live tests
+        run: |
+          Rscript -e "testthat::test_dir('tests/testthat', reporter = 'progress')"

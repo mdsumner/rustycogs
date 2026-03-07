@@ -7,10 +7,11 @@
 tiff_compression_to_zarr(code)
 }
 \arguments{
-\item{code}{Integer TIFF compression tag value.}
+\item{code}{Character string from async-tiff's compression enum Debug
+formatting (e.g. \code{"Deflate"}, \code{"Lzw"}, \code{"None"}, \code{"Zstd"}).}
 }
 \value{
-A list describing the Zarr compressor, or NULL for no compression.
+A list describing the Zarr compressor, or \code{NULL} for no compression.
 }
 \description{
 Map TIFF compression tag to Zarr compressor spec
