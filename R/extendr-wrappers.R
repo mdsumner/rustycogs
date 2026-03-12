@@ -18,8 +18,8 @@ NULL
 #' @param anon Logical, use anonymous/unsigned requests.
 #' @param concurrency Integer, max concurrent file scans.
 #' @return A data.frame with columns path, ifd, tile_col, tile_row,
-#'   offset, length, image_w, image_h, tile_w, tile_h, dtype,
-#'   compression, bits_per_sample, samples_per_pixel, crs_epsg,
+#'   offset, length, image_w, image_h, tile_w, tile_h, valid_w, valid_h,
+#'   dtype, compression, bits_per_sample, samples_per_pixel, crs_epsg,
 #'   gdal_nodata, planar_configuration, scale_x, scale_y,
 #'   origin_x, origin_y.
 tiff_refs <- function(paths, region, anon, concurrency) .Call(wrap__tiff_refs, paths, region, anon, concurrency)

@@ -1,5 +1,8 @@
 # rustycogs (dev)
 
+* Bumped from async_tiff 0.2.0 to dev for PR #265, problem with predictor decoding on right column tiles. 
+
+
 ## New functions
 
 * `tiff_ifd_info()` returns one row per IFD per file — the compact structural

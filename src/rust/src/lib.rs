@@ -81,9 +81,6 @@ fn make_store_and_path(
 
 // ── IFD scanning ────────────────────────────────────────────────────
 
-/// Columns built up across all files and IFDs.
-/// New vs v1: gdal_nodata, planar_configuration, scale_x, scale_y,
-/// origin_x, origin_y (flat geotransform from GeoTIFF tags).
 struct RefColumns {
     path: Vec<String>,
     ifd: Vec<i32>,
@@ -95,6 +92,8 @@ struct RefColumns {
     image_h: Vec<i32>,
     tile_w: Vec<i32>,
     tile_h: Vec<i32>,
+    valid_w: Vec<i32>,
+    valid_h: Vec<i32>,
     dtype: Vec<String>,
     compression: Vec<String>,
     bits_per_sample: Vec<i32>,
@@ -121,6 +120,8 @@ impl RefColumns {
             image_h: Vec::new(),
             tile_w: Vec::new(),
             tile_h: Vec::new(),
+            valid_w: Vec::new(),
+            valid_h: Vec::new(),
             dtype: Vec::new(),
             compression: Vec::new(),
             bits_per_sample: Vec::new(),
@@ -146,6 +147,8 @@ impl RefColumns {
         self.image_h.extend(other.image_h);
         self.tile_w.extend(other.tile_w);
         self.tile_h.extend(other.tile_h);
+        self.valid_w.extend(other.valid_w);
+        self.valid_h.extend(other.valid_h);
         self.dtype.extend(other.dtype);
         self.compression.extend(other.compression);
         self.bits_per_sample.extend(other.bits_per_sample);
@@ -196,7 +199,6 @@ async fn scan_one_file(
         let img_w = ifd.image_width();
         let img_h = ifd.image_height();
 
-        // Strip-based IFDs: warn and skip
         let t_w = match ifd.tile_width() {
             Some(w) if w > 0 => w,
             _ => {
@@ -215,6 +217,10 @@ async fn scan_one_file(
         let tiles_across = (img_w + t_w - 1) / t_w;
         let tiles_down   = (img_h + t_h - 1) / t_h;
 
+        // valid pixels in the last tile column / row
+        let last_valid_w = { let r = img_w % t_w; if r == 0 { t_w } else { r } };
+        let last_valid_h = { let r = img_h % t_h; if r == 0 { t_h } else { r } };
+
         let compression_str   = format!("{:?}", ifd.compression());
         let planar_str        = format!("{:?}", ifd.planar_configuration());
         let sample_fmt        = ifd.sample_format();
@@ -230,9 +236,6 @@ async fn scan_one_file(
 
         let nodata: Option<String> = ifd.gdal_nodata().map(|s| s.to_string());
 
-        // Geotransform from GeoTIFF tags.
-        // ModelPixelScale: [scale_x, scale_y, scale_z]
-        // ModelTiepoint:   [i, j, k, x, y, z, ...]  — first tiepoint used
         let scale_x: Option<f64> = ifd.model_pixel_scale().and_then(|s| s.first().copied());
         let scale_y: Option<f64> = ifd.model_pixel_scale().and_then(|s| s.get(1).copied());
         let origin_x: Option<f64> = ifd.model_tiepoint().and_then(|t| t.get(3).copied());
@@ -254,6 +257,9 @@ async fn scan_one_file(
             let off = offsets.get(tile_idx).copied().unwrap_or(0);
             let len = byte_counts.get(tile_idx).copied().unwrap_or(0);
 
+            let vw = if tc == tiles_across - 1 { last_valid_w } else { t_w };
+            let vh = if tr == tiles_down   - 1 { last_valid_h } else { t_h };
+
             cols.path.push(url_str.to_string());
             cols.ifd.push(ifd_idx as i32);
             cols.tile_col.push(tc as i32);
@@ -264,6 +270,8 @@ async fn scan_one_file(
             cols.image_h.push(img_h as i32);
             cols.tile_w.push(t_w as i32);
             cols.tile_h.push(t_h as i32);
+            cols.valid_w.push(vw as i32);
+            cols.valid_h.push(vh as i32);
             cols.dtype.push(dtype_str.clone());
             cols.compression.push(compression_str.clone());
             cols.bits_per_sample.push(bps_first);
@@ -291,8 +299,8 @@ async fn scan_one_file(
 /// @param anon Logical, use anonymous/unsigned requests.
 /// @param concurrency Integer, max concurrent file scans.
 /// @return A data.frame with columns path, ifd, tile_col, tile_row,
-///   offset, length, image_w, image_h, tile_w, tile_h, dtype,
-///   compression, bits_per_sample, samples_per_pixel, crs_epsg,
+///   offset, length, image_w, image_h, tile_w, tile_h, valid_w, valid_h,
+///   dtype, compression, bits_per_sample, samples_per_pixel, crs_epsg,
 ///   gdal_nodata, planar_configuration, scale_x, scale_y,
 ///   origin_x, origin_y.
 #[extendr]
@@ -354,6 +362,8 @@ fn tiff_refs(paths: Strings, region: Nullable<String>, anon: bool, concurrency: 
         image_h             = cols.image_h,
         tile_w              = cols.tile_w,
         tile_h              = cols.tile_h,
+        valid_w             = cols.valid_w,
+        valid_h             = cols.valid_h,
         dtype               = cols.dtype,
         compression         = cols.compression,
         bits_per_sample     = cols.bits_per_sample,
@@ -380,6 +390,8 @@ fn empty_refs_df() -> Robj {
         image_h             = Vec::<i32>::new(),
         tile_w              = Vec::<i32>::new(),
         tile_h              = Vec::<i32>::new(),
+        valid_w             = Vec::<i32>::new(),
+        valid_h             = Vec::<i32>::new(),
         dtype               = Vec::<String>::new(),
         compression         = Vec::<String>::new(),
         bits_per_sample     = Vec::<i32>::new(),
@@ -707,7 +719,7 @@ async fn fetch_decode_tile(
     let array = tile.decode(&Default::default())
         .map_err(|e| format!("Failed to decode tile: {}", e))?;
 
-    Ok(typed_array_to_robj(array))
+    Ok(typed_array_to_list(array))
 }
 
 // ── Batch tile fetch + decode ───────────────────────────────────────
@@ -784,13 +796,12 @@ async fn fetch_decode_tiles_batch(
     let ifd = tiff.ifds().get(ifd_index)
         .ok_or_else(|| format!("IFD index {} out of range", ifd_index))?;
 
-    // Use fetch_tiles() — one vectorized range request to the object
-    // store rather than N sequential ones. async-tiff 0.2.0 takes
-    // separate x and y slices.
-    let xs: Vec<usize> = cols.iter().map(|&c| c as usize).collect();
-    let ys: Vec<usize> = rows.iter().map(|&r| r as usize).collect();
+    // async-tiff main: fetch_tiles takes &[(usize, usize)], no reader arg
+    let coords: Vec<(usize, usize)> = cols.iter().zip(rows.iter())
+        .map(|(&c, &r)| (c as usize, r as usize))
+        .collect();
 
-    let tiles = ifd.fetch_tiles(&xs, &ys, &reader)
+    let tiles = ifd.fetch_tiles(&coords, &reader)
         .await
         .map_err(|e| format!("Failed to fetch tiles: {}", e))?;
 
@@ -798,14 +809,22 @@ async fn fetch_decode_tiles_batch(
         .map(|tile| {
             let array = tile.decode(&Default::default())
                 .map_err(|e| format!("Failed to decode tile: {}", e))?;
-            Ok(typed_array_to_robj(array))
+            Ok(typed_array_to_list(array))
         })
         .collect()
 }
 
-// ── Shared decode helper ────────────────────────────────────────────
+// ── Shared decode helpers ───────────────────────────────────────────
 
+/// Decode a TypedArray to a flat numeric Robj (for tiff_read_tiles).
 fn typed_array_to_robj(array: async_tiff::Array) -> Robj {
+    let (typed_data, _shape, _data_type) = array.into_inner();
+    let data_vec: Vec<f64> = typed_array_to_f64(typed_data);
+    data_vec.into_robj()
+}
+
+/// Decode a TypedArray to a named list (data, dim, dtype) (for tiff_tile/tiff_tiles).
+fn typed_array_to_list(array: async_tiff::Array) -> Robj {
     let (typed_data, shape, data_type) = array.into_inner();
 
     let dtype_str = match data_type {
@@ -822,7 +841,14 @@ fn typed_array_to_robj(array: async_tiff::Array) -> Robj {
         _ => "|u1",
     };
 
-    let data_vec: Vec<f64> = match typed_data {
+    let data_vec = typed_array_to_f64(typed_data);
+    let dim: Vec<i32> = shape.iter().map(|&d| d as i32).collect();
+
+    list!(data = data_vec, dim = dim, dtype = dtype_str).into()
+}
+
+fn typed_array_to_f64(typed_data: async_tiff::TypedArray) -> Vec<f64> {
+    match typed_data {
         async_tiff::TypedArray::UInt8(arr)   => arr.iter().map(|&v| v as f64).collect(),
         async_tiff::TypedArray::UInt16(arr)  => arr.iter().map(|&v| v as f64).collect(),
         async_tiff::TypedArray::UInt32(arr)  => arr.iter().map(|&v| v as f64).collect(),
@@ -833,11 +859,8 @@ fn typed_array_to_robj(array: async_tiff::Array) -> Robj {
         async_tiff::TypedArray::Int64(arr)   => arr.iter().map(|&v| v as f64).collect(),
         async_tiff::TypedArray::Float32(arr) => arr.iter().map(|&v| v as f64).collect(),
         async_tiff::TypedArray::Float64(arr) => arr.iter().copied().collect(),
-    };
-
-    let dim: Vec<i32> = shape.iter().map(|&d| d as i32).collect();
-
-    list!(data = data_vec, dim = dim, dtype = dtype_str).into()
+        async_tiff::TypedArray::Bool(arr)    => arr.iter().map(|&v| v as u8 as f64).collect(),
+    }
 }
 
 // ── Multi-file tile fetch ───────────────────────────────────────────
@@ -880,9 +903,6 @@ fn tiff_read_tiles(
         }
     };
 
-    // Group rows by (path, ifd_index), preserving original row indices
-    // so we can restore order after async fan-out.
-    // key: (path, ifd_index)  value: Vec<(original_row_idx, col, row)>
     let mut groups: std::collections::HashMap<(String, usize), Vec<(usize, usize, usize)>> =
         std::collections::HashMap::new();
 
@@ -894,7 +914,6 @@ fn tiff_read_tiles(
         groups.entry((path, ifd)).or_default().push((i, c, r));
     }
 
-    // Each task returns Vec<(original_row_idx, Robj)>
     let tasks: Vec<_> = groups.into_iter().map(|((path, ifd_index), tile_specs)| {
         let region_owned = region_ref.map(|s| s.to_string());
         async move {
@@ -909,7 +928,6 @@ fn tiff_read_tiles(
             .await
     });
 
-    // Collect into a flat vec sized to n, filling by original row index
     let mut output: Vec<Option<Robj>> = (0..n).map(|_| None).collect();
     for result in results {
         match result {
@@ -922,7 +940,6 @@ fn tiff_read_tiles(
         }
     }
 
-    // Replace any failed tiles with NA
     let final_list: Vec<Robj> = output.into_iter()
         .map(|opt| opt.unwrap_or_else(|| Robj::from(Rfloat::na())))
         .collect();
@@ -951,10 +968,12 @@ async fn fetch_decode_group(
     let ifd = tiff.ifds().get(ifd_index)
         .ok_or_else(|| format!("IFD index {} out of range in {}", ifd_index, url_str))?;
 
-    let xs: Vec<usize> = tile_specs.iter().map(|&(_, c, _)| c).collect();
-    let ys: Vec<usize> = tile_specs.iter().map(|&(_, _, r)| r).collect();
+    // async-tiff main: fetch_tiles takes &[(usize, usize)], no reader arg
+    let coords: Vec<(usize, usize)> = tile_specs.iter()
+        .map(|&(_, c, r)| (c, r))
+        .collect();
 
-    let tiles = ifd.fetch_tiles(&xs, &ys, &reader)
+    let tiles = ifd.fetch_tiles(&coords, &reader)
         .await
         .map_err(|e| format!("Failed to fetch tiles from {}: {}", url_str, e))?;
 

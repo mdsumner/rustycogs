@@ -35,8 +35,7 @@ dependencies = [
 [[package]]
 name = "async-tiff"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e108029e70637e665567b88706880d0fb4bc35b4d1ce8bf53b68ced1425a68"
+source = "git+https://github.com/developmentseed/async-tiff?branch=main#ebb6664ba5a0c9640760b1e3c71ec668d7f82460"
 dependencies = [
  "async-trait",
  "bytemuck",
