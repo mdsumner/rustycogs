@@ -1,7 +1,7 @@
 on:
   schedule:
     # 03:00 UTC daily
-    - cron: '0 3 * * *'
+    #- cron: '0 3 * * *'
   workflow_dispatch:
 
 name: live-tests
