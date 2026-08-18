@@ -23,7 +23,7 @@ refs_tiles <- function(x) {
   refs$pixel_size_x <- scale0_x * ifd0$image_w / refs$image_w
   refs$pixel_size_y <- scale0_y * ifd0$image_h / refs$image_h
   refs$xmin <- origin0_x + refs$tile_col * refs$tile_w * refs$pixel_size_x
-  refs$xmax <- origin0_x + (refs$tile_col * refs$tile_w + refs$valid_w) * refspixel_size_x
+  refs$xmax <- origin0_x + (refs$tile_col * refs$tile_w + refs$valid_w) * refs$pixel_size_x
   refs$ymax <-  origin0_y - refs$tile_row * refs$tile_h * refs$pixel_size_y
   refs$ymin <-  origin0_y - (refs$tile_row * refs$tile_h + refs$valid_h) * refs$pixel_size_y
   refs
