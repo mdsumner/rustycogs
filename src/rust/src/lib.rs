@@ -66,17 +66,31 @@ fn make_store_and_path(
             let obj_path = object_store::path::Path::from(key);
             Ok((Arc::new(store), obj_path))
         }
-        "http" | "https" => {
-            let base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-            let key = parsed.path().trim_start_matches('/');
-            let builder = object_store::http::HttpBuilder::new()
-                .with_url(&base);
-            let store = builder.build().map_err(|e| format!("HTTP build error: {}", e))?;
-            let obj_path = object_store::path::Path::from(key);
-            Ok((Arc::new(store), obj_path))
-        }
         scheme => Err(format!("Unsupported URL scheme: {}", scheme)),
     }
+}
+
+/// Build an `AsyncFileReader` for a path or URL.
+///
+/// http(s) URLs go straight to `ReqwestReader` on the full URL: query strings
+/// survive, redirects (including signed-URL redirects) are followed, and
+/// Range headers are preserved across the redirect. object_store's `HttpStore`
+/// cannot be used here because its `Path` model discards query strings.
+/// Everything else (s3/gs/az/local) goes through `make_store_and_path` +
+/// `ObjectReader` as before.
+fn make_reader(
+    url_str: &str,
+    region: Option<&str>,
+    anon: bool,
+) -> std::result::Result<Arc<dyn async_tiff::reader::AsyncFileReader>, String> {
+    if url_str.starts_with("http://") || url_str.starts_with("https://") {
+        let url = reqwest::Url::parse(url_str)
+            .map_err(|e| format!("URL parse error: {}", e))?;
+        let client = reqwest::Client::new();
+        return Ok(Arc::new(async_tiff::reader::ReqwestReader::new(client, url)));
+    }
+    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
+    Ok(Arc::new(async_tiff::reader::ObjectReader::new(store, obj_path)))
 }
 
 // ── IFD scanning ────────────────────────────────────────────────────
@@ -182,8 +196,7 @@ async fn scan_one_file(
     region: Option<&str>,
     anon: bool,
 ) -> std::result::Result<RefColumns, String> {
-    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
-    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let reader = make_reader(url_str, region, anon)?;
     let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
     let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
         .await
@@ -413,8 +426,7 @@ async fn ifd_info_one_file(
     region: Option<&str>,
     anon: bool,
 ) -> std::result::Result<IfdInfoColumns, String> {
-    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
-    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let reader = make_reader(url_str, region, anon)?;
     let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
     let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
         .await
@@ -698,8 +710,7 @@ async fn fetch_decode_tile(
     region: Option<&str>,
     anon: bool,
 ) -> std::result::Result<Robj, String> {
-    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
-    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let reader = make_reader(url_str, region, anon)?;
     let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
     let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
         .await
@@ -782,8 +793,7 @@ async fn fetch_decode_tiles_batch(
     region: Option<&str>,
     anon: bool,
 ) -> std::result::Result<Vec<Robj>, String> {
-    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
-    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let reader = make_reader(url_str, region, anon)?;
     let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
     let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
         .await
@@ -954,8 +964,7 @@ async fn fetch_decode_group(
     region: Option<&str>,
     anon: bool,
 ) -> std::result::Result<Vec<(usize, Robj)>, String> {
-    let (store, obj_path) = make_store_and_path(url_str, region, anon)?;
-    let reader = async_tiff::reader::ObjectReader::new(store, obj_path);
+    let reader = make_reader(url_str, region, anon)?;
     let cache = async_tiff::metadata::cache::ReadaheadMetadataCache::new(reader.clone());
     let mut meta_reader = async_tiff::metadata::TiffMetadataReader::try_open(&cache)
         .await

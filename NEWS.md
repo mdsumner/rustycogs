@@ -1,5 +1,14 @@
 # rustycogs (dev)
 
+* Fixed reading http(s) TIFF URLs that carry a query string (e.g. signed
+  download endpoints that redirect to a temporary S3 URL). These previously
+  failed because `object_store`'s `HttpStore` discards the query string (and
+  port) when building the request path. http(s) URLs are now read via
+  `async_tiff::reader::ReqwestReader` on the full URL instead, so query
+  strings survive and redirects (including cross-host signed-URL redirects)
+  are followed with `Range` headers preserved. s3://, gs://, az://, and local
+  paths are unaffected.
+
 * Bumped from async_tiff 0.2.0 to dev for PR #265, problem with predictor decoding on right column tiles. 
 
 
