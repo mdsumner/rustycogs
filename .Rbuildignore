@@ -8,3 +8,4 @@
 ^codecov\.yml$
 =======
 >>>>>>> 3f9ca381531d0fc2a18c16e44f173f89759f2665
+^\.posit/assistant$
