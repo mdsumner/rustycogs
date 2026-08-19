@@ -183,3 +183,38 @@ https://data.aad.gov.au/eds/api/dataset/9ab5c3a3-7753-4f0e-bac1-bfce742d1722/obj
 
 Expected: metadata and all IFD tables read via ranged GETs through the redirect;
 the `.tif.vat.dbf` 404 seen in GDAL debug is unrelated sidecar probing.
+
+## Corroboration: same bug in the official async-tiff Python package
+
+The official `async-tiff` Python package (built on `obstore`, which wraps the
+same `object_store` Rust crate) fails on this URL identically when using
+`obstore.store.HTTPStore` + `TIFF.open`, confirming the bug lives in
+`object_store`'s `Path`/`HttpStore` model, not in anything rustycogs-specific:
+
+```python
+from obstore.store import HTTPStore
+from async_tiff import TIFF
+
+store = HTTPStore.from_url("https://data.aad.gov.au")
+path = "eds/api/dataset/9ab5c3a3-7753-4f0e-bac1-bfce742d1722/object/download?prefix=rock_union1.tif"
+tiff = await TIFF.open(path, store=store)
+# FileNotFoundError: ... GET .../object/download%3Fprefix=rock_union1.tif ... 404 Not Found
+```
+
+The `?` gets percent-encoded as a literal path character (`%3F`) rather than
+treated as a query string, so the server 404s. Resolving the redirect
+manually first doesn't help either — the signed S3 URL it redirects to also
+carries a query string (the AWS SigV4 signature parameters), so it hits the
+same limitation.
+
+`async-tiff`'s Python bindings, however, also accept any object implementing
+the `obspec` `GetRangeAsync`/`GetRangesAsync` protocol as the `store`
+argument (`TIFF.open(path, store=...)`, see
+`python/src/reader.rs`/`python/src/tiff.rs` in the async-tiff source) —
+this is the same escape hatch rustycogs uses via `ReqwestReader` on the Rust
+side. A minimal such backend that issues plain HTTP Range requests (via
+`httpx`, following redirects on every request) against the full URL works:
+see `python_http_range_reader.py` alongside this doc. Tested working for
+`TIFF.open` and `fetch_tile`/`fetch_tiles` (tile *decoding* for this
+particular file separately fails on the unrelated 2-bit-per-sample gap
+documented in `investigate-2bit-tile-decode.md`).
