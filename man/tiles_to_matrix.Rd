@@ -6,9 +6,6 @@
 \usage{
 tiles_to_matrix(refs)
 }
-\arguments{
-\item{refs}{}
-}
 \description{
 Turn already-read data into a full matrix (from tiff_read)
 }
