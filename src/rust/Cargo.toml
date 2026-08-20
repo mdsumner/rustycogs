@@ -11,8 +11,7 @@ name = 'rustycogs'
 [dependencies]
 extendr-api = '0.7'
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-#async-tiff = { version = "0.2", features = ["object_store"] }
-async-tiff = { git = "https://github.com/developmentseed/async-tiff", branch = "main" }
+async-tiff = { version = "0.3" }
 object_store = { version = "0.13", features = ["aws", "gcp", "azure", "http"] }
 # async-tiff's reqwest dependency has default-features = false (no TLS backend);
 # enabling rustls here gives it TLS via Cargo feature unification.

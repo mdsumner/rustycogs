@@ -11,6 +11,7 @@
 
 * Bumped from async_tiff 0.2.0 to dev for PR #265, problem with predictor decoding on right column tiles. 
 
+* Installed volcano raster COG fixture for examples, and fixed a few empty doc problems. 
 
 ## New functions
 

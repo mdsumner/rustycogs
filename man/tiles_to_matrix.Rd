@@ -2,12 +2,24 @@
 % Please edit documentation in R/raster.R
 \name{tiles_to_matrix}
 \alias{tiles_to_matrix}
-\title{Turn already-read data into a full matrix (from tiff_read)}
+\title{Turn already-read data into a full matrix}
 \usage{
 tiles_to_matrix(refs)
 }
+\arguments{
+\item{refs}{data frame, output of \code{tiff_read_tiles}}
+}
+\value{
+matrix, data shaped from raw read into 'raster order'
+}
 \description{
-Turn already-read data into a full matrix (from tiff_read)
+Turn already-read data into a full matrix
+}
+\examples{
+vfile <- system.file("extdata/volcano-cog.tif", package = "rustycogs", mustWork = TRUE)
+refs <- refs_tiles(vfile)
+mat <- refs |> subset(ifd == 4) |>
+ tiff_read_tiles() |> tiles_to_matrix()
 }
 \seealso{
 refs_tiles

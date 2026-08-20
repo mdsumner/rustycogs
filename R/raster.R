@@ -8,12 +8,16 @@
 #' @export
 #' @seealso tiles_to_matrix
 #' @examples
+#' vfile <- system.file("extdata/volcano-cog.tif", package = "rustycogs", mustWork = TRUE)
+#' refs <- refs_tiles(vfile)
+#' dim(refs)
+#' str(refs)
 refs_tiles <- function(x) {
   refs <- tiff_refs(x)
   info <-  tiff_ifd_info(x)
 
   # Get IFD-0 geo params
-  ifd0 <- subset(info, ifd == 0)
+  ifd0 <- info[info$ifd == 0, ]
   scale0_x <- ifd0$scale_x
   scale0_y <- ifd0$scale_y  # positive, Y flips below
   origin0_x  <- ifd0$origin_x
@@ -29,14 +33,18 @@ refs_tiles <- function(x) {
   refs
 }
 
-#' Turn already-read data into a full matrix (from tiff_read)
+#' Turn already-read data into a full matrix
 #'
-#' @param refs
+#' @param refs data frame, output of `tiff_read_tiles`
 #'
-#' @returns
+#' @returns matrix, data shaped from raw read into 'raster order'
 #' @export
 #' @seealso refs_tiles
 #' @examples
+#' vfile <- system.file("extdata/volcano-cog.tif", package = "rustycogs", mustWork = TRUE)
+#' refs <- refs_tiles(vfile)
+#' mat <- refs |> subset(ifd == 4) |>
+#'  tiff_read_tiles() |> tiles_to_matrix()
 tiles_to_matrix <- function(refs) {
   # assumes refs is filtered to a single ifd, single path
   # and refs$data is already populated (list of numeric vecs)

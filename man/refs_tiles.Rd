@@ -15,6 +15,12 @@ dataframe with xmin,xmax,ymin,ymax add to the tiffs_refs output
 \description{
 Add extent information xmin,xmax,ymin,ymax to refs table
 }
+\examples{
+vfile <- system.file("extdata/volcano-cog.tif", package = "rustycogs", mustWork = TRUE)
+refs <- refs_tiles(vfile)
+dim(refs)
+str(refs)
+}
 \seealso{
 tiles_to_matrix
 }

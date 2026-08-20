@@ -1,8 +1,8 @@
 Package: rustycogs
 Title: TIFF Virtualization and Decoding via Rust
-Version: 0.2.0.9003
+Version: 0.2.0.9004
 Authors@R: 
-    person("Michael", "Sumner", , "mdsumner@gmail.com", role = c("aut", "cre"),
+    person("Michael", "Sumner", , "mdsumner@gmail.com", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0002-2471-7511"))
 Description: Extract byte-range chunk references from cloud-hosted TIFF and
     COG files without reading pixel data. Uses the Rust 'async-tiff' and
@@ -15,6 +15,7 @@ BugReports: https://github.com/hypertidy/rustycogs/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 SystemRequirements: Cargo (Rust's package manager), rustc
+Depends: R (>= 4.1.0)
 Imports:
     jsonlite
 Suggests:

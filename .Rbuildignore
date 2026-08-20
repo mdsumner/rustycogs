@@ -3,9 +3,12 @@
 ^src/\.cargo$
 ^README\.Rmd$
 ^\.github$
-<<<<<<< HEAD
 ^CODE_OF_CONDUCT\.md$
 ^codecov\.yml$
-=======
->>>>>>> 3f9ca381531d0fc2a18c16e44f173f89759f2665
 ^\.posit/assistant$
+^data-raw$
+^.*tar.gz$
+^.*\.check$
+^cran-comments\.md$
+^Rplot.png$
+^\.posit$
